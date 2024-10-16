@@ -58,15 +58,10 @@ class SecureClient:
         conn_frame = tk.LabelFrame(left_panel, text="Connection")
         conn_frame.pack(fill=tk.X, padx=5, pady=5)
         
-        tk.Label(conn_frame, text="Host:").pack(padx=5, pady=2)
+        tk.Label(conn_frame, text="Ngrok URL:").pack(padx=5, pady=2)
         self.host_entry = tk.Entry(conn_frame)
         self.host_entry.insert(0, self.host)
         self.host_entry.pack(padx=5, pady=2, fill=tk.X)
-        
-        tk.Label(conn_frame, text="Port:").pack(padx=5, pady=2)
-        self.port_entry = tk.Entry(conn_frame)
-        self.port_entry.insert(0, str(self.port))
-        self.port_entry.pack(padx=5, pady=2, fill=tk.X)
         
         self.connect_button = tk.Button(conn_frame, text="Connect", command=self.toggle_connection)
         self.connect_button.pack(padx=5, pady=5, fill=tk.X)
@@ -290,8 +285,13 @@ class SecureClient:
     
     def connect(self):
         try:
-            self.host = self.host_entry.get()
-            self.port = int(self.port_entry.get())
+            ngrok_url = self.host_entry.get()
+            
+            # Parse the ngrok URL
+            if ngrok_url.startswith("tcp://"):
+                ngrok_url = ngrok_url[6:]  # Remove "tcp://" prefix
+            self.host, port = ngrok_url.split(":")
+            self.port = int(port)
             
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.conn = self.context.wrap_socket(sock, server_hostname=self.host)
