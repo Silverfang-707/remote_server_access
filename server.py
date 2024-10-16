@@ -1,4 +1,3 @@
-# server.py
 import socket
 import ssl
 import threading
@@ -13,7 +12,9 @@ import io
 import json
 from pathlib import Path
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import messagebox, filedialog
+import subprocess
+import requests
 
 class RestrictedPaths:
     def __init__(self):
@@ -57,6 +58,10 @@ class SecureServer:
         self.running = False
         self.allow_input = True
         
+        # Ngrok process
+        self.ngrok_process = None
+        self.ngrok_url = None
+        
         # GUI setup
         self.setup_gui()
     
@@ -76,6 +81,9 @@ class SecureServer:
         
         self.status_label = tk.Label(status_frame, text="Stopped")
         self.status_label.pack(pady=5)
+        
+        self.ngrok_label = tk.Label(status_frame, text="Ngrok: Not running")
+        self.ngrok_label.pack(pady=5)
         
         # Control Frame
         control_frame = tk.LabelFrame(self.root, text="Controls")
@@ -120,7 +128,6 @@ class SecureServer:
             self.paths_list.insert(tk.END, path)
     
     def add_restricted_path(self):
-        from tkinter import filedialog
         path = filedialog.askdirectory()
         if path:
             self.restricted_paths.add_restricted_path(path)
@@ -226,13 +233,40 @@ class SecureServer:
             conn.close()
             self.status_label.config(text="Waiting for connection")
     
+    def start_ngrok(self):
+        ngrok_command = f"ngrok tcp {self.port}"
+        self.ngrok_process = subprocess.Popen(ngrok_command.split(), stdout=subprocess.PIPE)
+        
+        # Wait for ngrok to generate the public URL
+        while True:
+            try:
+                ngrok_tunnels = requests.get("http://localhost:4040/api/tunnels").json()["tunnels"]
+                for tunnel in ngrok_tunnels:
+                    if tunnel["proto"] == "tcp":
+                        self.ngrok_url = tunnel["public_url"]
+                        self.ngrok_label.config(text=f"Ngrok URL: {self.ngrok_url}")
+                        return
+            except:
+                pass
+    
+    def stop_ngrok(self):
+        if self.ngrok_process:
+            self.ngrok_process.terminate()
+            self.ngrok_process = None
+        self.ngrok_url = None
+        self.ngrok_label.config(text="Ngrok: Not running")
+    
     def start_server(self):
         self.running = True
-        self.status_label.config(text="Waiting for connection")
+        self.status_label.config(text="Starting server...")
         self.start_button.config(state=tk.DISABLED)
         self.stop_button.config(state=tk.NORMAL)
         
+        # Start ngrok
+        self.start_ngrok()
+        
         def server_loop():
+            self.status_label.config(text="Waiting for connection")
             while self.running:
                 try:
                     client_sock, addr = self.sock.accept()
@@ -250,6 +284,7 @@ class SecureServer:
     def stop_server(self):
         self.running = False
         self.sock.close()
+        self.stop_ngrok()
         self.status_label.config(text="Stopped")
         self.start_button.config(state=tk.NORMAL)
         self.stop_button.config(state=tk.DISABLED)
